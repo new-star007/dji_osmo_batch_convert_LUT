@@ -164,12 +164,27 @@ def get_video_files(directory: Path):
     )
 
 
+def escape_filter_arg(value: str) -> str:
+    """Escape a value for use inside an ffmpeg filtergraph argument.
+
+    The value passes through two parsers (the filtergraph parser and the
+    per-filter option parser), each of which treats backslash as an escape
+    character, so literal backslashes and quotes must be doubled. A literal
+    colon must also be escaped so the option parser does not split on it.
+    Without this, Windows paths like ``C:\\Users\\...`` inside ``lut3d=``
+    are mangled (e.g. ``C:`` becomes the filename and ``\\U`` collapses to
+    ``U``) and the conversion fails.
+    """
+    option_level = value.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    return option_level.replace("\\", "\\\\").replace("'", "\\'")
+
+
 def build_command(video: Path, output: Path, ffmpeg, encoder: str, lut: Path):
     return [
         str(ffmpeg), "-y", "-hide_banner", "-loglevel", "error", "-nostats",
         "-progress", "pipe:2",
         "-i", str(video),
-        "-vf", f"lut3d={lut}",
+        "-vf", f"lut3d={escape_filter_arg(str(lut))}",
         "-c:v", encoder,
         "-b:v", "50M",
         "-c:a", "aac",
@@ -179,11 +194,13 @@ def build_command(video: Path, output: Path, ffmpeg, encoder: str, lut: Path):
 
 
 def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
-            lut: Path, on_progress=None, should_stop=None):
+            lut: Path, on_progress=None, should_stop=None, on_error=None):
     """Convert a single video. Returns "ok", "skipped", "cancelled" or "failed".
     on_progress(duration, processed) receives floats in seconds and is
-    called periodically. If should_stop() returns True while running, the
-    ffmpeg process is terminated and the partial output file is removed."""
+    called periodically. on_error(message) receives the last ffmpeg error
+    lines when a conversion fails. If should_stop() returns True while
+    running, the ffmpeg process is terminated and the partial output file
+    is removed."""
     out = output_dir / f"{video.stem}_rec709.mp4"
     if out.exists():
         return "skipped"
@@ -194,6 +211,7 @@ def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",
     )
+    error_lines = []
     for line in process.stdout:
         if should_stop and should_stop():
             process.terminate()
@@ -204,6 +222,9 @@ def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
             if out.exists():
                 out.unlink(missing_ok=True)
             return "cancelled"
+        stripped = line.strip()
+        if stripped and not stripped.startswith("out_time"):
+            error_lines.append(stripped)
         if not on_progress:
             continue
         if line.startswith("out_time="):
@@ -217,6 +238,8 @@ def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
                 continue
             on_progress(duration, processed)
     process.wait()
+    if process.returncode != 0 and on_error:
+        on_error("\n".join(error_lines[-10:]) or f"ffmpeg 退出码 {process.returncode}")
     return "ok" if process.returncode == 0 else "failed"
 
 def probe_duration(ffmpeg, video: Path):

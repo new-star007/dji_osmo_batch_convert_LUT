@@ -45,7 +45,8 @@ def main():
     print(f"Found {len(videos)} video(s) in {input_dir}, LUT: {lut.name}\n")
     for v in videos:
         print(f"[CONVERT] {v.name} ({encoder})", flush=True)
-        result = convert(v, output_dir, ffmpeg, encoder, lut)
+        result = convert(v, output_dir, ffmpeg, encoder, lut,
+                         on_error=lambda msg: print(msg, flush=True))
         if result == "skipped":
             print(f"[SKIP] {v.name}")
         elif result == "failed":

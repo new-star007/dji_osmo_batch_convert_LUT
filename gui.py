@@ -284,6 +284,7 @@ class Worker(QThread):
             result = convert(
                 video, self.output_dir, ffmpeg, encoder, self.lut,
                 on_progress=on_progress, should_stop=lambda: self._stop,
+                on_error=self.log_signal.emit,
             )
             if result == "ok":
                 succeeded += 1
