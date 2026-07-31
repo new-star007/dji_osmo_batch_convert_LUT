@@ -6,8 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt, QThread, Signal
-from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QSettings, Qt, QThread, QUrl, Signal
+from PySide6.QtGui import QColor, QCursor, QDesktopServices, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
@@ -42,6 +43,7 @@ from core import (
 APP_NAME = "DJI LUT 批量转换工具"
 APP_VERSION = "1.1.0"
 SUPPORTED_TEXT = "支持的格式：mp4 / mov / m4v / avi / mkv"
+LUT_DOWNLOAD_URL = "https://www.dji.com/cn/lut"
 
 ENCODER_CHOICES = [
     "自动检测",
@@ -442,9 +444,13 @@ class MainWindow(QMainWindow):
         import_btn = QPushButton("导入 LUT…")
         import_btn.setToolTip("从本地导入 .cube LUT 文件")
         import_btn.clicked.connect(self._import_lut)
+        download_btn = QPushButton("DJI LUT 下载")
+        download_btn.setToolTip("打开或复制 DJI 官方 LUT 下载链接")
+        download_btn.clicked.connect(self._show_lut_download_menu)
         lut_row = QHBoxLayout()
         lut_row.addWidget(self.lut_combo, stretch=1)
         lut_row.addWidget(import_btn)
+        lut_row.addWidget(download_btn)
         form.addRow("LUT 文件", lut_row)
         form.addRow("", self._make_hint(
             "将 D-Log M 色彩转换为 Rec.709。可点击「导入 LUT…」添加其他 .cube 文件，"
@@ -606,6 +612,17 @@ class MainWindow(QMainWindow):
         self.log.appendPlainText(f"已导入 LUT：{dest.name}")
         self.statusBar().showMessage(f"已导入 LUT：{dest.name}", 4000)
         self._validate()
+
+    def _show_lut_download_menu(self):
+        menu = QMenu(self)
+        open_action = menu.addAction("打开链接")
+        copy_action = menu.addAction("复制链接")
+        chosen = menu.exec(QCursor.pos())
+        if chosen is open_action:
+            QDesktopServices.openUrl(QUrl(LUT_DOWNLOAD_URL))
+        elif chosen is copy_action:
+            QApplication.clipboard().setText(LUT_DOWNLOAD_URL)
+            self.statusBar().showMessage("LUT 下载链接已复制到剪贴板", 4000)
 
     def _refresh_encoder_hint(self):
         selected = self.encoder_combo.currentText()

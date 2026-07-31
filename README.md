@@ -5,7 +5,7 @@
 ## 功能特性
 
 - **批量转换**：将输入文件夹中的视频（mp4 / mov / m4v / avi / mkv）批量应用 LUT
-- **LUT 管理**：内置 DJI OSMO Pocket 3 D-Log M → Rec.709 LUT，支持导入 / 拖拽添加自定义 `.cube` 文件
+- **LUT 管理**：内置 DJI OSMO Pocket 3 D-Log M → Rec.709 LUT，支持导入 / 拖拽添加自定义 `.cube` 文件，也可从 [DJI 官网下载](https://www.dji.com/cn/lut)
 - **智能编码器**：自动检测当前平台最快可用的编码器（macOS 的 `h264_videotoolbox`、NVIDIA 的 `h264_nvenc`、AMD 的 `h264_amf` 等），也可手动指定
 - **进度展示**：实时显示每个文件的转换进度与运行日志
 - **可中断转换**：随时取消，自动清理半成品文件
@@ -42,7 +42,7 @@ python gui.py
 操作步骤：
 1. 选择「输入文件夹」（可直接拖拽到输入框）
 2. 选择「输出文件夹」
-3. 选择 LUT 文件（默认内置 LUT，可点击「导入 LUT…」或直接拖入 `.cube` 文件）
+3. 选择 LUT 文件（默认内置 LUT，可点击「导入 LUT…」或直接拖入 `.cube` 文件；点击「DJI LUT 下载」可一键打开或复制 [DJI 官方 LUT 下载链接](https://www.dji.com/cn/lut)）
 4. 选择视频编码器（默认自动检测）
 5. 点击「开始转换」
 
@@ -108,6 +108,10 @@ pyinstaller batch_lut.spec
 - 使用 ffmpeg 的 `lut3d` 滤镜应用 `.cube` LUT，视频转码为 H.264（码率 50M），音频转码为 AAC（码率 192k）
 - 转换核心逻辑位于 `core.py`，CLI（`batch_lut.py`）与 GUI（`gui.py`）共用
 - 内置 LUT：`lib/DJI OSMO Pocket 3 D-Log M to Rec.709 V1.cube`
+
+## 相关链接
+
+- [DJI 官网 LUT 下载](https://www.dji.com/cn/lut)：DJI 各机型官方 LUT 文件下载
 
 ## 许可证
 
