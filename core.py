@@ -46,6 +46,33 @@ def resource_path(relative: str) -> Path:
     return BASE_DIR / relative
 
 
+def user_lut_dir() -> Path:
+    """Directory for user-uploaded LUT files (persists next to the app)."""
+    directory = app_home() / "luts"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def available_luts():
+    """Built-in LUT first, then user-uploaded .cube files."""
+    luts = []
+    if DEFAULT_LUT.is_file():
+        luts.append(DEFAULT_LUT)
+    for f in sorted(user_lut_dir().glob("*.cube")):
+        if DEFAULT_LUT.resolve() != f.resolve() and f not in luts:
+            luts.append(f)
+    return luts
+
+
+def import_lut(src: Path) -> Path:
+    """Copy a user LUT into the user LUT directory. Returns the copy path."""
+    dest = user_lut_dir() / src.name
+    if dest.exists():
+        dest.unlink()
+    shutil.copy2(src, dest)
+    return dest
+
+
 def bundled_ffmpeg() -> Path | None:
     """Locate the ffmpeg binary bundled alongside the executable."""
     if not IS_FROZEN:

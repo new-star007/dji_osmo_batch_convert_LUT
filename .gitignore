@@ -6,6 +6,7 @@ build/assets/
 dist/
 input/*
 output/*
+luts/
 !input/.gitkeep
 !output/.gitkeep
 .DS_Store

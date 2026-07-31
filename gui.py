@@ -4,7 +4,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal, Qt
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (
 from core import (
     DEFAULT_LUT,
     app_home,
+    available_luts,
     find_ffmpeg,
     get_video_files,
+    import_lut,
     pick_encoder,
     convert,
 )
@@ -117,8 +119,14 @@ class MainWindow(QMainWindow):
         self.output_edit = self._path_field(form, "输出文件夹",
                                             str(home / "output"),
                                             is_dir=True)
-        self.lut_edit = self._path_field(form, "LUT 文件",
-                                         str(DEFAULT_LUT), is_dir=False)
+        self.lut_combo = QComboBox()
+        self._refresh_luts()
+        import_btn = QPushButton("导入 LUT…")
+        import_btn.clicked.connect(self._import_lut)
+        lut_row = QHBoxLayout()
+        lut_row.addWidget(self.lut_combo, stretch=1)
+        lut_row.addWidget(import_btn)
+        form.addRow("LUT 文件", lut_row)
         self.encoder_combo = QComboBox()
         self.encoder_combo.addItems(ENCODER_CHOICES)
         form.addRow("视频编码器", self.encoder_combo)
@@ -161,15 +169,38 @@ class MainWindow(QMainWindow):
         if path:
             edit.setText(path)
 
+    def _refresh_luts(self, select=None):
+        self.lut_combo.clear()
+        for lut in available_luts():
+            label = f"内置: {lut.name}" if lut == DEFAULT_LUT else lut.name
+            self.lut_combo.addItem(label, str(lut))
+        if select:
+            idx = self.lut_combo.findData(str(select))
+            if idx >= 0:
+                self.lut_combo.setCurrentIndex(idx)
+
+    def _import_lut(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "导入 LUT 文件", "", "LUT 文件 (*.cube);;所有文件 (*)")
+        if not path:
+            return
+        try:
+            dest = import_lut(Path(path))
+        except OSError as e:
+            QMessageBox.warning(self, "提示", f"导入失败：{e}")
+            return
+        self._refresh_luts(select=dest)
+        self.log.appendPlainText(f"已导入 LUT：{dest.name}")
+
     def start_convert(self):
         if self.worker and self.worker.isRunning():
             return
         input_dir = Path(self.input_edit.text())
         output_dir = Path(self.output_edit.text())
-        lut = Path(self.lut_edit.text())
         if not input_dir.is_dir():
             QMessageBox.warning(self, "提示", "输入文件夹不存在")
             return
+        lut = Path(self.lut_combo.currentData())
         if not lut.is_file():
             QMessageBox.warning(self, "提示", "LUT 文件不存在")
             return
