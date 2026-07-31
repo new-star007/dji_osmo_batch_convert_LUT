@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 build/work/
 build/assets/
+build/batch_lut/
 dist/
 input/*
 output/*

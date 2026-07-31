@@ -74,22 +74,48 @@ def import_lut(src: Path) -> Path:
 
 
 def bundled_ffmpeg() -> Path | None:
-    """Locate the ffmpeg binary bundled alongside the executable."""
+    """Locate the ffmpeg binary bundled alongside the executable.
+
+    Covers macOS .app bundles (Contents/Frameworks, Contents/Resources)
+    as well as Windows / Linux one-dir layouts (_internal or exe dir).
+    """
     if not IS_FROZEN:
         return None
     exe_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    exe_dir = Path(sys.executable).resolve().parent
+    meipass = Path(getattr(sys, "_MEIPASS", ""))
     candidates = [
-        Path(getattr(sys, "_MEIPASS", "")) / exe_name,
-        Path(sys.executable).parent / exe_name,
-        Path(sys.executable).parent / "_internal" / exe_name,
+        meipass / exe_name,
+        exe_dir / exe_name,
+        exe_dir / "_internal" / exe_name,
+        exe_dir.parent / "Frameworks" / exe_name,
+        exe_dir.parent.parent / "Frameworks" / exe_name,
+        exe_dir.parent / "Resources" / exe_name,
+        exe_dir.parent.parent / "Resources" / exe_name,
     ]
+    seen = set()
     for cand in candidates:
+        if cand in seen:
+            continue
+        seen.add(cand)
         try:
             if cand.is_file():
                 return cand
         except OSError:
             continue
     return None
+
+
+def build_asset_ffmpeg() -> Path | None:
+    """Static ffmpeg downloaded by build/download_ffmpeg.py (dev mode)."""
+    if IS_FROZEN:
+        return None
+    exe_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    asset = BASE_DIR / "build" / "assets" / exe_name
+    try:
+        return asset if asset.is_file() else None
+    except OSError:
+        return None
 
 
 def find_ffmpeg():
@@ -99,6 +125,9 @@ def find_ffmpeg():
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg:
         return Path(ffmpeg), "system"
+    asset = build_asset_ffmpeg()
+    if asset:
+        return asset, "bundled-asset"
     try:
         from static_ffmpeg import run
         ffmpeg, _ = run.get_or_fetch_platform_executables_else_raise()
@@ -150,10 +179,11 @@ def build_command(video: Path, output: Path, ffmpeg, encoder: str, lut: Path):
 
 
 def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
-            lut: Path, on_progress=None):
-    """Convert a single video. Returns "ok", "skipped" or "failed".
+            lut: Path, on_progress=None, should_stop=None):
+    """Convert a single video. Returns "ok", "skipped", "cancelled" or "failed".
     on_progress(duration, processed) receives floats in seconds and is
-    called periodically."""
+    called periodically. If should_stop() returns True while running, the
+    ffmpeg process is terminated and the partial output file is removed."""
     out = output_dir / f"{video.stem}_rec709.mp4"
     if out.exists():
         return "skipped"
@@ -165,6 +195,15 @@ def convert(video: Path, output_dir: Path, ffmpeg, encoder: str,
         text=True, encoding="utf-8", errors="replace",
     )
     for line in process.stdout:
+        if should_stop and should_stop():
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            if out.exists():
+                out.unlink(missing_ok=True)
+            return "cancelled"
         if not on_progress:
             continue
         if line.startswith("out_time="):
