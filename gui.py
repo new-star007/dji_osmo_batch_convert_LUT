@@ -41,7 +41,7 @@ from core import (
 )
 
 APP_NAME = "DJI LUT 批量转换工具"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 SUPPORTED_TEXT = "支持的格式：mp4 / mov / m4v / avi / mkv"
 LUT_DOWNLOAD_URL = "https://www.dji.com/cn/lut"
 
