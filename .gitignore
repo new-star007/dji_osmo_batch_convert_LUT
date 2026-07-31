@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+build/work/
+build/assets/
+dist/
+input/*
+output/*
+!input/.gitkeep
+!output/.gitkeep
+.DS_Store
