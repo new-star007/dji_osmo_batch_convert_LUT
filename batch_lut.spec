@@ -70,8 +70,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "DJI LUT",
             "CFBundleDisplayName": "DJI LUT 批量转换工具",
-            "CFBundleShortVersionString": "1.1.1",
-            "CFBundleVersion": "1.1.1",
+            "CFBundleShortVersionString": "1.1.2",
+            "CFBundleVersion": "1.1.2",
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": "11.0",
         },

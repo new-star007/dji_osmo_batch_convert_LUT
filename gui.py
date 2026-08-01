@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from core import (
     DEFAULT_LUT,
     app_home,
+    available_encoders,
     available_luts,
     find_ffmpeg,
     get_video_files,
@@ -41,7 +42,7 @@ from core import (
 )
 
 APP_NAME = "DJI LUT 批量转换工具"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 SUPPORTED_TEXT = "支持的格式：mp4 / mov / m4v / avi / mkv"
 LUT_DOWNLOAD_URL = "https://www.dji.com/cn/lut"
 
@@ -256,6 +257,15 @@ class Worker(QThread):
             return
         self.log_signal.emit(f"使用 ffmpeg（{source}）：{ffmpeg}")
         encoder = self.encoder if self.encoder else pick_encoder(ffmpeg)
+        # 用户手动选的编码器可能不在当前 ffmpeg 构建里（如 OSS 版没有 nvenc/amf），
+        # 提前校验并给出中文提示，而不是等到转码时报 "Unknown encoder" 晦涩错误。
+        if self.encoder and self.encoder not in available_encoders(ffmpeg):
+            self.log_signal.emit(
+                f"错误：当前 ffmpeg 不支持编码器 {self.encoder}。\n"
+                f"可用编码器：{'、'.join(sorted(available_encoders(ffmpeg))) or '无'}。\n"
+                "请选择「自动检测」或 libx264。")
+            self.done_signal.emit(0, 0, 0, 1)
+            return
         self.log_signal.emit(f"视频编码器：{encoder}")
 
         videos = get_video_files(self.input_dir)
@@ -338,6 +348,7 @@ class MainWindow(QMainWindow):
         self.running = False
         self.ffmpeg_ok = False
         self.detected_encoder = None
+        self.available_encoders = set()
         self._errors = []
 
         central = QWidget()
@@ -636,11 +647,35 @@ class MainWindow(QMainWindow):
         else:
             self.encoder_hint.setText(ENCODER_HINTS.get(selected, ""))
 
+    def _refresh_encoder_choices(self):
+        """只显示当前 ffmpeg 真正支持的编码器，避免报 "Unknown encoder"。
+
+        打包的 OSS 版 ffmpeg 没有硬件编码器，之前硬编码列出所有选项，
+        在 Windows 上选 h264_nvenc / h264_amf 都会转码失败。
+        这里用 available_encoders() 过滤，只保留确实存在的选项。
+        """
+        current = self.encoder_combo.currentText()
+        allowed = {"自动检测", "libx264"}
+        for enc in ENCODER_CHOICES:
+            if enc != "自动检测" and enc in self.available_encoders:
+                allowed.add(enc)
+        ordered = [enc for enc in ENCODER_CHOICES if enc in allowed]
+        self.encoder_combo.blockSignals(True)
+        self.encoder_combo.clear()
+        self.encoder_combo.addItems(ordered)
+        idx = self.encoder_combo.findText(current)
+        if idx >= 0:
+            self.encoder_combo.setCurrentIndex(idx)
+        self.encoder_combo.blockSignals(False)
+        self._refresh_encoder_hint()
+
     # ---------- environment check ----------
 
     def _on_env_checked(self, ffmpeg, source, encoder):
         self.ffmpeg_ok = bool(ffmpeg)
         self.detected_encoder = encoder
+        self.available_encoders = available_encoders(ffmpeg) if ffmpeg else set()
+        self._refresh_encoder_choices()
         if ffmpeg:
             builtin = source in ("bundled", "bundled-asset")
             note = "（已内置，开箱即用）" if builtin else ""

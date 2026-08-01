@@ -9,6 +9,7 @@ from core import (
     DEFAULT_INPUT,
     DEFAULT_OUTPUT,
     DEFAULT_LUT,
+    available_encoders,
     find_ffmpeg,
     get_video_files,
     pick_encoder,
@@ -30,6 +31,12 @@ def main():
         print("Error: ffmpeg not found. Install it (e.g. `brew install ffmpeg`) or run `pip install -r requirements.txt`.")
         sys.exit(1)
     encoder = args.encoder or pick_encoder(ffmpeg)
+    # 手动指定的编码器可能不存在于当前 ffmpeg 构建（如 OSS 版没有 nvenc/amf），
+    # 提前校验并明确报错，避免转码时出现晦涩的 "Unknown encoder"。
+    if args.encoder and args.encoder not in available_encoders(ffmpeg):
+        print(f"Error: encoder '{args.encoder}' is not supported by this ffmpeg build.")
+        print("Available encoders: " + ", ".join(sorted(available_encoders(ffmpeg))))
+        sys.exit(1)
     print(f"Using ffmpeg ({source}): {ffmpeg}")
     print(f"Video encoder: {encoder}\n")
 

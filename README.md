@@ -6,7 +6,8 @@
 
 - **批量转换**：将输入文件夹中的视频（mp4 / mov / m4v / avi / mkv）批量应用 LUT
 - **LUT 管理**：内置 DJI OSMO Pocket 3 D-Log M → Rec.709 LUT，支持导入 / 拖拽添加自定义 `.cube` 文件，也可从 [DJI 官网下载](https://www.dji.com/cn/lut)
-- **智能编码器**：自动检测当前平台最快可用的编码器（macOS 的 `h264_videotoolbox`、NVIDIA 的 `h264_nvenc`、AMD 的 `h264_amf` 等），也可手动指定
+- **智能编码器**：自动检测当前平台实际可用的编码器（macOS 的 `h264_videotoolbox`、Windows 的 NVIDIA `h264_nvenc` / AMD `h264_amf` 等），界面只显示 ffmpeg 真正支持的选项，也可手动指定
+- **通用兼容输出**：DJI 素材为 10-bit HEVC，转码时强制下采样为 8-bit `yuv420p` 标准 H.264 High，任意播放器（Windows 媒体播放器、浏览器、手机等）均可直接打开
 - **进度展示**：实时显示每个文件的转换进度与运行日志
 - **可中断转换**：随时取消，自动清理半成品文件
 - **自动跳过**：输出文件（`原名_rec709.mp4`）已存在时自动跳过，避免重复转换
@@ -23,7 +24,8 @@ pip install -r requirements.txt
 
 依赖：
 - `PySide6`：GUI
-- `static-ffmpeg`：开发时自动获取静态 ffmpeg
+- `static-ffmpeg`：macOS / Linux 开发时自动获取静态 ffmpeg（OSS 开源构建，含 `h264_videotoolbox` / `h264_vaapi`）
+- Windows 打包时改用 gyan.dev 的完整构建（`build/download_ffmpeg.py` 自动下载），内置 NVIDIA `h264_nvenc`、AMD `h264_amf`、Intel `h264_qsv`、VAAPI 硬件编码器
 
 ffmpeg 的获取优先级（无需手动安装）：
 1. 打包应用内置的 ffmpeg
@@ -91,7 +93,7 @@ powershell -ExecutionPolicy Bypass -File build/build.ps1
 
 产物：`dist/DJI LUT` 及 `dist/DJI-LUT-Converter-Windows.zip`
 
-打包前会先通过 `build/download_ffmpeg.py` 下载静态 ffmpeg 并随包内置，因此应用完全离线可用。macOS 打包后会自动执行 ad-hoc 签名以减少 Gatekeeper 拦截。
+打包前会先通过 `build/download_ffmpeg.py` 下载静态 ffmpeg 并随包内置，因此应用完全离线可用。Windows 会下载 gyan.dev 的完整构建（含 `h264_nvenc` / `h264_amf` 硬件编码器）；macOS 打包后会自动执行 ad-hoc 签名以减少 Gatekeeper 拦截。
 
 也可以直接使用：
 
@@ -105,9 +107,10 @@ pyinstaller batch_lut.spec
 
 ## 技术说明
 
-- 使用 ffmpeg 的 `lut3d` 滤镜应用 `.cube` LUT，视频转码为 H.264（码率 50M），音频转码为 AAC（码率 192k）
+- 使用 ffmpeg 的 `lut3d` 滤镜应用 `.cube` LUT，视频转码为 H.264（码率 50M，像素格式强制 `yuv420p`），音频转码为 AAC（码率 192k）
 - 转换核心逻辑位于 `core.py`，CLI（`batch_lut.py`）与 GUI（`gui.py`）共用
 - 内置 LUT：`lib/DJI OSMO Pocket 3 D-Log M to Rec.709 V1.cube`
+- Windows 打包的 ffmpeg 来自 [gyan.dev](https://www.gyan.dev/ffmpeg/builds/)（含硬件编码器）；macOS / Linux 使用 `static-ffmpeg` OSS 构建
 
 ## 相关链接
 

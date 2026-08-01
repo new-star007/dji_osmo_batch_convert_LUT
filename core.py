@@ -142,14 +142,37 @@ def find_ffmpeg():
     return None, None
 
 
-def pick_encoder(ffmpeg):
+def available_encoders(ffmpeg):
+    """返回当前 ffmpeg 构建实际支持的视频编码器集合。
+
+    解析 `ffmpeg -encoders` 输出：每行第一个 token 是能力标记
+    （以 V 开头的行才是视频编码器），第二个 token 才是编码器名称。
+    打包用的 OSS 版 ffmpeg 不含 nvenc/amf 等硬件编码器，
+    通过这里可以拿到真实的可用列表，避免界面列出根本不存在的选项。
+    """
     try:
-        encoders = subprocess.run(
+        output = subprocess.run(
             [str(ffmpeg), "-hide_banner", "-encoders"],
             capture_output=True, text=True, timeout=30,
         ).stdout
     except Exception:
-        encoders = ""
+        return set()
+    encoders = set()
+    for line in output.splitlines():
+        parts = line.split()
+        # 跳过图例行（如 "V..... = Video"）——它的第二个 token 是 "="
+        if len(parts) >= 3 and parts[0].startswith("V") and parts[1] != "=":
+            encoders.add(parts[1])
+    return encoders
+
+
+def pick_encoder(ffmpeg):
+    """按平台偏好从真实可用编码器中挑选最快的硬件编码器。
+
+    依次检查 ENCODER_PREFERENCE 里的候选，只要 ffmpeg 支持就选中；
+    全部不支持时回退到兼容性最好的 libx264（纯软件编码）。
+    """
+    encoders = available_encoders(ffmpeg)
     pref = ENCODER_PREFERENCE.get(platform.system(), [FALLBACK_ENCODER])
     for enc in pref:
         if enc in encoders:
@@ -180,11 +203,21 @@ def escape_filter_arg(value: str) -> str:
 
 
 def build_command(video: Path, output: Path, ffmpeg, encoder: str, lut: Path):
+    """构造 ffmpeg 转码命令。
+
+    关键点：
+    - `-pix_fmt yuv420p`：DJI 素材是 10-bit HEVC，若不强制 8-bit 4:2:0，
+      libx264 会输出 H.264 High 4:4:4 / 10-bit，绝大多数播放器无法打开；
+      强制 yuv420p 后输出为标准 H.264 High，任何播放器都能播放。
+    - `-vf lut3d=...`：路径需经 escape_filter_arg 转义，否则 Windows
+      盘符路径（如 C:\\Users\\...）会被 ffmpeg 过滤器解析破坏。
+    """
     return [
         str(ffmpeg), "-y", "-hide_banner", "-loglevel", "error", "-nostats",
         "-progress", "pipe:2",
         "-i", str(video),
         "-vf", f"lut3d={escape_filter_arg(str(lut))}",
+        "-pix_fmt", "yuv420p",
         "-c:v", encoder,
         "-b:v", "50M",
         "-c:a", "aac",
